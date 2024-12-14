@@ -1,0 +1,206 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © husain07qnvuv
+
+//@version=6
+indicator("Bullish Indicator Strategy v2", overlay=false)
+
+// User inputs
+rsiPeriod = input.int(14, title="RSI Period")
+macdFast = input.int(12, title="MACD Fast Length")
+macdSlow = input.int(26, title="MACD Slow Length")
+macdSignal = input.int(9, title="MACD Signal Length")
+ma20Period = input.int(20, title="20-period MA")
+ma50Period = input.int(50, title="50-period MA")
+ma100Period = input.int(100, title="100-period MA")
+ma200Period = input.int(200, title="200-period MA")
+bollingerLength = input.int(20, title="Bollinger Bands Length")
+adxPeriod = input.int(14, title="ADX Period")
+stochLength = input.int(14, title="Stochastic Length")
+cmfLength = input.int(20, title="CMF Length")  // Define CMF length
+sarStart = input.float(0.02, title="SAR Start")
+sarIncrement = input.float(0.02, title="SAR Increment")
+sarMax = input.float(0.2, title="SAR Max")
+
+// Calculate indicators
+rsiValue = ta.rsi(close, rsiPeriod)
+[macdLine, signalLine, macdHistogram] = ta.macd(close, macdFast, macdSlow, macdSignal)
+ma20 = ta.sma(close, ma20Period)
+ma50 = ta.sma(close, ma50Period)
+ma100 = ta.sma(close, ma100Period)
+ma200 = ta.sma(close, ma200Period)
+[upperBB, middleBB, lowerBB] = ta.bb(close, bollingerLength, 2)
+
+// Manual calculation for OBV 
+var float obvValue = 0  // Initialize OBV value 
+obvValue := na(obvValue[1]) ? 0 : obvValue[1] + (close > close[1] ? volume : close < close[1] ? -volume : 0)
+
+// CVD Calculation
+var float cvdValue = 0
+cvdValue := na(cvdValue[1]) ? volume : cvdValue[1] + (close - close[1]) * volume // CVD calculation based on delta volume
+
+// Manual calculation for CMF
+moneyFlowMultiplier = ((close - low) - (high - close)) / (high - low)
+moneyFlowVolume = moneyFlowMultiplier * volume
+cmfValue = ta.sma(moneyFlowVolume, cmfLength) / ta.sma(volume, cmfLength)
+
+//ADX Calculation manually
+// True Range (TR) Calculation
+trueRange = math.max(high - low, math.max(math.abs(high - close[1]), math.abs(low - close[1])))
+// Directional Movement (DM) Calculations
+plusDM = high - high[1]
+minusDM = low[1] - low
+// Apply conditions for +DM and -DM
+plusDM := (plusDM > minusDM and plusDM > 0) ? plusDM : 0
+minusDM := (minusDM > plusDM and minusDM > 0) ? minusDM : 0
+// Wilder's Smoothing for TR, +DM, and -DM
+smoothedTR = ta.rma(trueRange, adxPeriod) // Wilder's smoothing for True Range
+smoothedPlusDM = ta.rma(plusDM, adxPeriod) // Wilder's smoothing for +DM
+smoothedMinusDM = ta.rma(minusDM, adxPeriod) // Wilder's smoothing for -DM
+// Directional Indicators (DI) Calculations
+plusDI = 100 * (smoothedPlusDM / smoothedTR) // Positive DI as a percentage
+minusDI = 100 * (smoothedMinusDM / smoothedTR) // Negative DI as a percentage
+// DX Calculation
+dx = 100 * math.abs(plusDI - minusDI) / (plusDI + minusDI)
+// ADX Calculation
+adxValue = ta.rma(dx, adxPeriod) // Smoothed DX for final ADX value
+
+
+
+// Calculate Stochastic Oscillator
+stochK = ta.stoch(close, high, low, stochLength)
+stochD = ta.sma(stochK, 3) // Smooth K with a simple moving average
+
+// Determine Stochastic Colors Based on Conditions
+stochColor = (stochK < 25 and stochK > stochD) ? color.rgb(23, 103, 26) :  (stochK >= 25 and stochK > stochD) ? color.new(color.green ,0) :  ( stochK <= 80 and stochK < stochD) ? color.new(color.orange ,0) :  (stochK > 80 and stochK < stochD) ? color.new(color.red ,0) :  na
+// Calculate SAR
+sarValue = ta.sar(sarStart, sarIncrement, sarMax)
+
+// Determine if OBV is rising or falling based on last 15 min candle
+obvChangeLast15Min = obvValue - obvValue[15] // Compare current OBV with the OBV from 15 minutes ago
+
+// Determine OBV color based on conditions
+obvRisingColor = (obvChangeLast15Min > 0 ) ? color.green :  (obvChangeLast15Min < 0 ) ? color.red : na
+
+// Determine ADX Color Based on Conditions
+adxColor = (adxValue > 25 and plusDM > minusDM) ? color.green :  (adxValue < 20 and minusDM > plusDM) ? color.new(color.red ,0) :  na
+
+// VWAP Calculation
+vwapValue = ta.vwap(close)
+
+// Determine VWAP Color Based on Conditions
+vwapColor = (close > vwapValue) ? color.rgb(23, 103, 26) :  (close < vwapValue) ? color.new(color.red ,0): na
+
+// Ichimoku Calculation
+conversionLine = (ta.highest(high, 9) + ta.lowest(low, 9)) / 2
+baseLine = (ta.highest(high, 26) + ta.lowest(low, 26)) / 2
+leadingSpanA = (conversionLine + baseLine) / 2
+leadingSpanB = (ta.highest(high, 52) + ta.lowest(low, 52)) / 2
+
+ichimokuColor = (close > leadingSpanA)? color.rgb(23, 103, 26):   (close < leadingSpanB)? color.new(color.red ,0): color.new(color.orange ,0)
+
+ // TSI Display     
+tsiVal=ta.tsi(close, 25, 13)
+tsiColor=(tsiVal>0)? color.green: color.red 
+
+// Calculate ATR
+atrValue = ta.atr(14) // Using a period of 14 for ATR
+
+// ATR Display     
+atrDisplayVal=ta.atr(14)
+atrColor=(atrDisplayVal<1.5)? na: color.green 
+
+// EMA Calculation for EMA(8)
+ema8Value = ta.ema(close ,8)
+// Determine EMA Color Based on Conditions 
+emaColor =
+  	(close > ema8Value)? color.new(color.green ,0):(close < ema8Value)?color.new(color.red ,0):na 
+
+//Universal background color for indicators and values
+indicatorBgColorTransparent = #00000000 // Transparent for indicator column
+  
+// Define specific colors for each indicator based on conditions
+valueBgColor(value) =>
+    value >= 70 ? #034506 : value >= 50 ? color.new(color.green ,0): value < 30 ? color.new(color.orange ,0): color.new(color.red, 0)
+
+// RSI specific colors based on conditions
+rsiColor(value) =>
+    value >= 60 ? color.rgb(23, 103, 26): value >= 50 ? color.new(color.green ,0): value >= 40 ? color.orange : color.new(color.red ,0)
+
+// MACD specific colors based on conditions 
+macdColor(macdLine ,signalLine) =>
+    (macdLine > signalLine and macdLine > 0) ? color.rgb(23 ,103 ,26):  (macdLine < signalLine and macdLine > 0) ? color.new(color.green ,0):  (macdLine > signalLine and macdLine < 0) ? color.new(color.orange ,0):  (macdLine < signalLine and macdLine < 0) ? color.new(color.red ,0):  na
+
+// CMF specific colors based on conditions
+cmfColor(cmfValue) =>
+    (cmfValue > 0 and cmfValue > cmfValue[1]) ? color.rgb(23, 103, 26) : (cmfValue > 0 and cmfValue < cmfValue[1]) ? color.new(color.green ,0) :   (cmfValue < 0 and cmfValue > cmfValue[1]) ? color.new(color.orange ,0) :  (cmfValue < 0 and cmfValue < cmfValue[1]) ? color.new(color.red ,0):  na  
+
+// Moving Average Color Logic for MA Ribbon
+maRibbonColor = (ma20 > ma50 and ma50 > ma200) ? ((close > ma20) ? color.rgb(23 ,103 ,26) : color.new(color.red ,0)) : ((close > ma20 or close > ma50 or close > ma200) ? color.new(color.orange,0):color.red)
+
+// Bollinger Bands Color Logic with corrected logic
+bollingerColor(price) =>
+    price > upperBB? color.rgb(23 ,103 ,26): price <= upperBB and price > middleBB? color.new(color.green ,0): price <= middleBB and price > lowerBB? color.new(color.orange ,0): color.new(color.red ,0)
+
+// CVD Color Logic 
+cvdColor(deltaValue) =>
+    deltaValue >= 0? color.green :color.new(color.red ,0)
+
+/// Create a table with enough rows and columns for a horizontal layout
+var table indicatorTable = table.new(position.bottom_left, 24, 3)  // 3 rows, 24 columns
+
+// Update table values dynamically on the last bar
+if barstate.islast
+    // First row: Categories (spanning multiple columns for clarity)
+    table.cell(indicatorTable, 1, 0, "--- Momentum ---", bgcolor=color.new(color.gray, 0), text_color=color.white, text_size=size.small)
+    table.cell(indicatorTable, 5, 0, "--- Trend ---", bgcolor=color.new(color.gray, 0), text_color=color.white, text_size=size.small)
+    table.cell(indicatorTable, 10, 0, "--- Volatility ---", bgcolor=color.new(color.gray, 0), text_color=color.white, text_size=size.small)
+    table.cell(indicatorTable, 12, 0, "--- Volume ---", bgcolor=color.new(color.gray, 0), text_color=color.white, text_size=size.small)
+    table.cell(indicatorTable, 14, 0, "--- Other ---", bgcolor=color.new(color.gray, 0), text_color=color.white, text_size=size.small)
+
+    // Adjusted table layout for the correct sequence of indicators
+
+// Second row: Indicator Names
+table.cell(indicatorTable, 0, 1, "Indicators", bgcolor=color.new(color.blue, 0), text_color=color.white, text_size=size.small)
+
+table.cell(indicatorTable, 1, 1, "RSI", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 2, 1, "MACD", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 3, 1, "Stochastic Oscillator", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 4, 1, "TSI", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+
+table.cell(indicatorTable, 5, 1, "Moving Averages", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 6, 1, "ADX (Average Directional Index)", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 7, 1, "VWAP", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 8, 1, "EMA(8)", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 9, 1, "Ichimoku Cloud (SPAN A & B)", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+
+table.cell(indicatorTable, 10, 1, "Bollinger Bands", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 11, 1, "ATR (Average True Range)", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+
+table.cell(indicatorTable, 12, 1, "On-Balance Volume (OBV)", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 13, 1, "CVD", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+
+table.cell(indicatorTable, 14, 1, "CMF", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 15, 1, "SAR", bgcolor=indicatorBgColorTransparent, text_color=color.white, text_size=size.small)
+
+// Third row: Indicator Values
+table.cell(indicatorTable, 0, 2, "Value", bgcolor=color.new(color.blue, 0), text_color=color.white, text_size=size.small)
+
+table.cell(indicatorTable, 1, 2, str.tostring(rsiValue, "#0.00"), bgcolor=rsiColor(rsiValue), text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 2, 2, str.tostring(macdLine, "#0.00"), bgcolor=macdColor(macdLine, signalLine), text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 3, 2, str.tostring(stochK, "#0.00"), bgcolor=stochColor, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 4, 2, str.tostring(tsiVal, "#0.00"), bgcolor=tsiColor, text_color=color.white, text_size=size.small)
+
+table.cell(indicatorTable, 5, 2, str.tostring(close, "#0.00"), bgcolor=maRibbonColor, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 6, 2, str.tostring(adxValue, "#0.00"), bgcolor=adxColor, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 7, 2, str.tostring(vwapValue, "#0.00"), bgcolor=vwapColor, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 8, 2, str.tostring(ema8Value, "#0.00"), bgcolor=emaColor, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 9, 2, str.tostring(close, "#0.00"), bgcolor=ichimokuColor, text_color=color.white, text_size=size.small)
+
+table.cell(indicatorTable, 10, 2, str.tostring(close, "#0.00"), bgcolor=bollingerColor(close), text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 11, 2, str.tostring(atrDisplayVal, "#0.00"), bgcolor=atrColor, text_color=color.white, text_size=size.small)
+
+table.cell(indicatorTable, 12, 2, str.tostring(obvValue[15], "#0.00"), bgcolor=obvRisingColor, text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 13, 2, str.tostring(cvdValue, "#0.00"), bgcolor=cvdColor(cvdValue), text_color=color.white, text_size=size.small)
+
+table.cell(indicatorTable, 14, 2, str.tostring(cmfValue, "#0.00"), bgcolor=cmfColor(cmfValue), text_color=color.white, text_size=size.small)
+table.cell(indicatorTable, 15, 2, str.tostring(sarValue, "#0.00"), bgcolor=valueBgColor(close), text_color=color.white, text_size=size.small)
