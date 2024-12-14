@@ -1,0 +1,106 @@
+//@version=6
+strategy("Swing Trader Strategy", overlay=true)
+
+// Inputs
+slPercent = input.float(2.0, "Stop Loss Percentage (%)", step=0.1) / 100
+tsPercent = input.float(1.5, "Trailing Stop Percentage (%)", step=0.1) / 100
+capitalPercent = input.float(100.0, "Use Capital Percentage (%)", step=1.0)
+startDate = input.time(timestamp("2024-12-01 00:00"), "Start Date")
+endDate = input.time(timestamp("2024-12-31 23:59"), "End Date")
+
+// MACD setup
+[macdLine, signalLine, _] = ta.macd(close, 12, 26, 9)
+
+// Variables
+var float lastBuyPrice = na
+var float lastSellPrice = na // Variable for last sell price
+var float highestPrice = na
+var float trailingStopPrice = na
+var int tradeDirection = na // 1 = Long, -1 = Short, na = No trade
+
+// Check if within the defined date range
+inDateRange = (time >= startDate) and (time <= endDate)
+
+// Entry condition: MACD Line crosses over Signal Line (long trade)
+longCondition = ta.crossover(macdLine, signalLine) and na(tradeDirection) and inDateRange
+
+// Update highest price and trailing stop price during an open trade
+if (tradeDirection == 1)
+    highestPrice := math.max(highestPrice, close)
+    trailingStopPrice := highestPrice * (1 - tsPercent)
+
+// Exit condition: Trailing stop or Stop Loss for a long trade
+exitCondition = (tradeDirection == 1) and (close <= trailingStopPrice or close <= lastBuyPrice * (1 - slPercent))
+
+// Position size calculation based on capital percentage
+positionSize = (strategy.equity * (capitalPercent / 100)) / close
+
+// Execute trade actions
+if (longCondition)
+    strategy.entry("Buy", strategy.long, qty=positionSize)
+    lastBuyPrice := close
+    highestPrice := close
+    trailingStopPrice := highestPrice * (1 - tsPercent)
+    tradeDirection := 1
+
+if (exitCondition)
+
+    strategy.close("Buy")
+
+    lastSellPrice := close // Store last sell price when exiting the trade
+
+    tradeDirection := na
+
+    lastBuyPrice := na
+
+    highestPrice := na
+
+    trailingStopPrice := na
+
+
+
+// Table Setup: Names on top row, values below
+
+var table tradeInfo = table.new(position.top_right, 8, 2, bgcolor=color.new(color.gray, 90), frame_width=1)
+
+
+
+// Row for variable names (first row)
+
+table.cell(tradeInfo, 0, 0, "Current Price", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 1, 0, "Highest Price", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 2, 0, "Trailing Stop", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 3, 0, "Stop Loss", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 4, 0, "Last Buy Price", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 5, 0, "Last Sell Price", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 6, 0, "Trade Direction", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 7, 0, "positionSize", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+
+
+
+
+
+// Row for variable values (second row)
+
+table.cell(tradeInfo, 0, 1, str.tostring(close), text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 1, 1, str.tostring(highestPrice, "0.00"), text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 2, 1, str.tostring(trailingStopPrice, "0.00"), text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 3, 1, str.tostring(lastBuyPrice * (1 - slPercent), "0.00"), text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 4, 1, str.tostring(lastBuyPrice, "0.00"), text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 5, 1, str.tostring(lastSellPrice, "0.00"), text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 6, 1, str.tostring(tradeDirection, "0"), text_color=color.white, text_size=size.small)
+
+table.cell(tradeInfo, 7, 1, str.tostring(positionSize, "0.00"), text_color=color.white, text_size=size.small)
