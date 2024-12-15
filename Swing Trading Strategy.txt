@@ -33,7 +33,7 @@ if (tradeDirection == 1)
 exitCondition = (tradeDirection == 1) and (close <= trailingStopPrice or close <= lastBuyPrice * (1 - slPercent))
 
 // Position size calculation based on capital percentage
-positionSize = (strategy.equity * (capitalPercent / 100)) / close
+positionSize = math.floor((strategy.equity * (capitalPercent / 100)) / close)
 
 // Execute trade actions
 if (longCondition)
@@ -103,4 +103,4 @@ table.cell(tradeInfo, 5, 1, str.tostring(lastSellPrice, "0.00"), text_color=colo
 
 table.cell(tradeInfo, 6, 1, str.tostring(tradeDirection, "0"), text_color=color.white, text_size=size.small)
 
-table.cell(tradeInfo, 7, 1, str.tostring(positionSize, "0.00"), text_color=color.white, text_size=size.small)
+table.cell(tradeInfo, 7, 1, str.tostring(positionSize, "0"), text_color=color.white, text_size=size.small)
